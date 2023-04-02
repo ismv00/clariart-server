@@ -1,14 +1,7 @@
 import { z } from "zod";
 import { FastifyInstance } from "fastify";
 import { prisma } from "./lib/prisma";
-import jwt from "jsonwebtoken";
-import authConfig from "./config/auth.json";
-
-function GeneratedToken(params = {}) {
-  return jwt.sign(params, authConfig.secret, {
-    expiresIn: 86400,
-  });
-}
+import { GeneratedToken } from "./utils/generatedToken";
 
 export async function appRoutes(app: FastifyInstance) {
   app.post("/admin", async (request, response) => {
@@ -54,5 +47,30 @@ export async function appRoutes(app: FastifyInstance) {
     const users = await prisma.user.findMany();
 
     return users;
+  });
+
+  app.post("/authenticate", async (request, response) => {
+    const userRegister = z.object({
+      email: z.string(),
+      password: z.string(),
+    });
+
+    const { email, password } = userRegister.parse(request.body);
+    const user = await prisma.user.findFirst({
+      where: {
+        email: email,
+        password: password,
+      },
+    });
+    if (!user) {
+      response
+        .status(401)
+        .send({ error: "User not found or password invalid" });
+    } else {
+      response.send({
+        user,
+        token: GeneratedToken({ id: user?.id }),
+      });
+    }
   });
 }
